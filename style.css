@@ -160,7 +160,8 @@ body {
 /* 점수 / 목숨 / 최고점 스타일 */
 #score,
 #high-score,
-#lives {
+#lives,
+#shield {
   font-size: 16px;
   padding: 6px 10px;
   border-radius: 999px;
@@ -177,6 +178,9 @@ body {
 }
 #lives {
   color: #ffb3c6;
+}
+#shield {
+  color: #9cff57;
 }
 
 /* 오버레이 */
