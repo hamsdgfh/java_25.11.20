@@ -82,7 +82,7 @@ const items = [];
 const itemSettings = {
   size: 30,
   speed: 3,
-  spawnInterval: 8000, // 8초마다 한 번 정도
+  spawnInterval: 10000, // 8초마다 한 번 정도
 };
 
 // 게임 상태 변수
@@ -303,7 +303,14 @@ function spawnObstacle() {
 function spawnItem() {
   const size = itemSettings.size;
   const rand = Math.random();
-  const type = rand < 0.6 ? "life" : "shield"; // 60% 하트, 40% 쉴드
+  let type;
+
+  // 하트 20%, 쉴드 80%
+  if (rand < 0.3) {
+    type = "life";
+  } else {
+    type = "shield";
+  }
 
   items.push({
     x: Math.random() * (canvas.width - size),
@@ -314,6 +321,7 @@ function spawnItem() {
     type,
   });
 }
+
 
 function updateObstacles(delta) {
   const distance = obstacleSettings.speed * (delta / 16.67);
