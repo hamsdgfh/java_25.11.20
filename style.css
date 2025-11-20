@@ -157,8 +157,10 @@ body {
   pointer-events: none;
 }
 
+/* 점수 / 목숨 / 최고점 스타일 */
 #score,
-#high-score {
+#high-score,
+#lives {
   font-size: 16px;
   padding: 6px 10px;
   border-radius: 999px;
@@ -172,6 +174,9 @@ body {
 }
 #high-score {
   color: #4ce0ff;
+}
+#lives {
+  color: #ffb3c6;
 }
 
 /* 오버레이 */
@@ -248,28 +253,4 @@ body {
 }
 
 .info-panel h2 {
-  font-size: 16px;
-  margin: 0 0 8px;
-  color: #ffffff;
-}
-
-.info-panel ul {
-  list-style: none;
-  padding-left: 0;
-  margin: 0 0 12px;
-  font-size: 14px;
-  color: #c3c7f5;
-}
-
-.info-panel li::before {
-  content: "• ";
-  color: #ff6ac1;
-}
-
-/* 푸터 */
-.game-footer {
-  margin-top: 14px;
-  text-align: center;
-  font-size: 12px;
-  color: #7b80ab;
-}
+  fon

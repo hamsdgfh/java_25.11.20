@@ -4,6 +4,7 @@ const ctx = canvas.getContext("2d");
 
 const scoreEl = document.getElementById("score");
 const highScoreEl = document.getElementById("high-score");
+const livesEl = document.getElementById("lives");
 
 const overlay = document.getElementById("overlay");
 const overlayTitle = document.getElementById("overlay-title");
@@ -34,17 +35,27 @@ const difficultySettings = {
   },
 };
 
+// 플레이어 관련 설정
+const playerConfig = {
+  width: 40,
+  height: 60,
+  invincibilityDuration: 1500, // 피격 후 무적 시간(ms)
+  shieldDuration: 5000,        // 쉴드 아이템 지속(ms)
+  maxLives: 5,
+};
+
 let currentDifficultyKey = "easy";
 
-// 플레이어
+// 플레이어 상태
 const player = {
-  x: canvas.width / 2 - 20,
+  x: canvas.width / 2 - playerConfig.width / 2,
   y: canvas.height - 80,
-  width: 40,
-  height: 60, // 캡슐 모양용
-  color: "#4ce0ff",
+  width: playerConfig.width,
+  height: playerConfig.height,
   speed: difficultySettings[currentDifficultyKey].playerSpeed,
   dx: 0,
+  isInvincible: false,
+  isShielded: false,
 };
 
 // 장애물
@@ -57,19 +68,30 @@ const obstacleSettings = {
   spawnInterval: difficultySettings[currentDifficultyKey].spawnInterval,
 };
 
+// 아이템 (하트/쉴드)
+const items = [];
+const itemSettings = {
+  size: 30,
+  speed: 3,
+  spawnInterval: 8000, // 8초마다 한 번 정도
+};
+
 // 게임 상태
 let score = 0;
 let highScore = parseInt(localStorage.getItem("dodge_highscore") || "0", 10);
+let lives = 3;
 let gameOver = false;
 let running = false;
 let obstacleSpawner = null;
+let itemSpawner = null;
 let lastTimestamp = 0;
 
 // 초기 HUD
 highScoreEl.textContent = `최고 점수: ${highScore}`;
+livesEl.innerHTML = `생명: ${"❤️".repeat(lives)}`;
 
 /* ---------------------------------------------------
-   도형 그리기 (예쁜 버전)
+   도형 그리기 (네온 + 아이템)
 --------------------------------------------------- */
 
 // 둥근 사각형 그리기 헬퍼
@@ -88,21 +110,32 @@ function drawRoundedRect(x, y, w, h, r) {
   ctx.closePath();
 }
 
-// 플레이어 (네온 캡슐 + 코어)
+// 플레이어 (네온 캡슐 + 코어 + 무적/쉴드 표현)
 function drawPlayer() {
   const x = player.x;
   const y = player.y;
   const w = player.width;
   const h = player.height;
 
-  // 바깥 네온 캡슐
+  // 무적 상태일 때 깜빡이기
+  if (player.isInvincible) {
+    ctx.globalAlpha = Date.now() % 300 < 150 ? 0.4 : 1;
+  }
+
+  // 바깥 네온 캡슐 색 (쉴드 상태면 녹색 계열)
   const gradient = ctx.createLinearGradient(x, y, x + w, y + h);
-  gradient.addColorStop(0, "#4ce0ff");
-  gradient.addColorStop(0.5, "#ffe66a");
-  gradient.addColorStop(1, "#ff6ac1");
+  if (player.isShielded) {
+    gradient.addColorStop(0, "#9cff57");
+    gradient.addColorStop(0.5, "#57ffb3");
+    gradient.addColorStop(1, "#4ce0ff");
+  } else {
+    gradient.addColorStop(0, "#4ce0ff");
+    gradient.addColorStop(0.5, "#ffe66a");
+    gradient.addColorStop(1, "#ff6ac1");
+  }
 
   ctx.save();
-  ctx.shadowColor = "#4ce0ff";
+  ctx.shadowColor = player.isShielded ? "#9cff57" : "#4ce0ff";
   ctx.shadowBlur = 18;
 
   drawRoundedRect(x, y, w, h, 20);
@@ -122,17 +155,24 @@ function drawPlayer() {
     h / 2
   );
   coreGradient.addColorStop(0, "#ffffff");
-  coreGradient.addColorStop(1, "#4ce0ff");
+  coreGradient.addColorStop(1, player.isShielded ? "#9cff57" : "#4ce0ff");
   ctx.fillStyle = coreGradient;
   drawRoundedRect(x + 8, y + 10, w - 16, h - 20, 14);
   ctx.fill();
   ctx.restore();
+
+  ctx.globalAlpha = 1;
 }
 
 // 장애물 (둥근 네온 블록)
 function drawObstacles() {
   obstacles.forEach((o) => {
-    const gradient = ctx.createLinearGradient(o.x, o.y, o.x + o.width, o.y + o.height);
+    const gradient = ctx.createLinearGradient(
+      o.x,
+      o.y,
+      o.x + o.width,
+      o.y + o.height
+    );
     gradient.addColorStop(0, "#ff6ac1");
     gradient.addColorStop(1, "#ffe66a");
 
@@ -143,6 +183,59 @@ function drawObstacles() {
     ctx.fillStyle = gradient;
     ctx.fill();
     ctx.restore();
+  });
+}
+
+// 하트 아이템
+function drawHeart(x, y, size) {
+  ctx.fillStyle = "deeppink";
+  ctx.beginPath();
+  const topCurveHeight = size * 0.3;
+  ctx.moveTo(x, y + topCurveHeight);
+  ctx.bezierCurveTo(x, y, x - size / 2, y, x - size / 2, y + topCurveHeight);
+  ctx.bezierCurveTo(
+    x - size / 2,
+    y + (size + topCurveHeight) / 2,
+    x,
+    y + (size + topCurveHeight) / 2,
+    x,
+    y + size
+  );
+  ctx.bezierCurveTo(
+    x,
+    y + (size + topCurveHeight) / 2,
+    x + size / 2,
+    y + (size + topCurveHeight) / 2,
+    x + size / 2,
+    y + topCurveHeight
+  );
+  ctx.bezierCurveTo(x + size / 2, y, x, y, x, y + topCurveHeight);
+  ctx.closePath();
+  ctx.fill();
+}
+
+// 쉴드 아이템 (원 + S)
+function drawShield(x, y, size) {
+  ctx.fillStyle = "limegreen";
+  ctx.beginPath();
+  ctx.arc(x + size / 2, y + size / 2, size / 2, 0, Math.PI * 2);
+  ctx.fill();
+
+  ctx.fillStyle = "white";
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  ctx.font = "bold 16px sans-serif";
+  ctx.fillText("S", x + size / 2, y + size / 2 + 1);
+}
+
+// 아이템 그리기
+function drawItems() {
+  items.forEach((item) => {
+    if (item.type === "life") {
+      drawHeart(item.x, item.y, item.width);
+    } else if (item.type === "shield") {
+      drawShield(item.x, item.y, item.width);
+    }
   });
 }
 
@@ -169,40 +262,114 @@ function spawnObstacle() {
   });
 }
 
+function spawnItem() {
+  const size = itemSettings.size;
+  const rand = Math.random();
+  const type = rand < 0.6 ? "life" : "shield"; // 60% 하트, 40% 쉴드
+
+  items.push({
+    x: Math.random() * (canvas.width - size),
+    y: -size,
+    width: size,
+    height: size,
+    speed: itemSettings.speed,
+    type,
+  });
+}
+
+function updateEntities(list, speedKey) {
+  for (let i = list.length - 1; i >= 0; i--) {
+    const e = list[i];
+    e.y += (speedKey ? obstacleSettings.speed : e.speed) * (1 / 60);
+    if (e.y > canvas.height) {
+      list.splice(i, 1);
+    }
+  }
+}
+
 function updateObstacles(delta) {
-  const distance = obstacleSettings.speed * (delta / 16.67); // 프레임 보정
+  const distance = obstacleSettings.speed * (delta / 16.67);
   for (let i = obstacles.length - 1; i >= 0; i--) {
     const o = obstacles[i];
     o.y += distance;
-
     if (o.y > canvas.height) {
       obstacles.splice(i, 1);
     }
   }
 }
 
-function checkCollision() {
-  for (let i = 0; i < obstacles.length; i++) {
-    const o = obstacles[i];
-    if (
-      player.x < o.x + o.width &&
-      player.x + player.width > o.x &&
-      player.y < o.y + o.height &&
-      player.y + player.height > o.y
-    ) {
-      endGame();
-      break;
+function updateItems(delta) {
+  const distance = itemSettings.speed * (delta / 16.67);
+  for (let i = items.length - 1; i >= 0; i--) {
+    const item = items[i];
+    item.y += distance;
+    if (item.y > canvas.height) {
+      items.splice(i, 1);
     }
   }
 }
 
+// 충돌
+function isColliding(a, b) {
+  return (
+    a.x < b.x + b.width &&
+    a.x + a.width > b.x &&
+    a.y < b.y + b.height &&
+    a.y + a.height > b.y
+  );
+}
+
+function checkCollisions() {
+  // 장애물 충돌
+  if (!player.isInvincible && !player.isShielded) {
+    for (let i = 0; i < obstacles.length; i++) {
+      const o = obstacles[i];
+      if (isColliding(player, o)) {
+        lives--;
+        if (lives <= 0) {
+          endGame();
+        } else {
+          setTemporaryInvincibility(playerConfig.invincibilityDuration);
+        }
+        break;
+      }
+    }
+  }
+
+  // 아이템 충돌
+  for (let i = items.length - 1; i >= 0; i--) {
+    const item = items[i];
+    if (isColliding(player, item)) {
+      activateItem(item.type);
+      items.splice(i, 1);
+    }
+  }
+}
+
+function activateItem(type) {
+  if (type === "life") {
+    if (lives < playerConfig.maxLives) {
+      lives++;
+    }
+  } else if (type === "shield") {
+    player.isShielded = true;
+    setTimeout(() => {
+      player.isShielded = false;
+    }, playerConfig.shieldDuration);
+  }
+}
+
+function setTemporaryInvincibility(duration) {
+  player.isInvincible = true;
+  setTimeout(() => {
+    player.isInvincible = false;
+  }, duration);
+}
+
 function updateScore(delta) {
-  // delta 기반 점수 증가
   score += delta * 0.02;
   const displayScore = Math.floor(score);
   scoreEl.textContent = `점수: ${displayScore}`;
-
-  // 난이도 기반 기본 속도 + 점수에 따라 추가로 조금씩 상승
   obstacleSettings.speed =
     obstacleSettings.baseSpeed + displayScore * 0.02;
 }
@@ -211,30 +378,31 @@ function clearCanvas() {
   ctx.clearRect(0, 0, canvas.width, canvas.height);
 }
 
+function updateHUD() {
+  const displayScore = Math.floor(score);
+  scoreEl.textContent = `점수: ${displayScore}`;
+  highScoreEl.textContent = `최고 점수: ${highScore}`;
+  livesEl.innerHTML = `생명: ${"❤️".repeat(lives)}`;
+}
+
 /* ---------------------------------------------------
    난이도 변경
 --------------------------------------------------- */
 
 function setDifficulty(diffKey) {
   currentDifficultyKey = diffKey;
-  const settings = difficultySettings[diffKey];
+  const s = difficultySettings[diffKey];
 
-  // 플레이어 속도 & 장애물 설정 갱신
-  player.speed = settings.playerSpeed;
-  obstacleSettings.baseSpeed = settings.baseSpeed;
-  obstacleSettings.speed = settings.baseSpeed;
-  obstacleSettings.spawnInterval = settings.spawnInterval;
+  player.speed = s.playerSpeed;
+  obstacleSettings.baseSpeed = s.baseSpeed;
+  obstacleSettings.speed = s.baseSpeed;
+  obstacleSettings.spawnInterval = s.spawnInterval;
 
-  // 버튼 UI 업데이트
   diffButtons.forEach((btn) => {
-    if (btn.dataset.diff === diffKey) {
-      btn.classList.add("active");
-    } else {
-      btn.classList.remove("active");
-    }
+    if (btn.dataset.diff === diffKey) btn.classList.add("active");
+    else btn.classList.remove("active");
   });
 
-  // 게임이 진행 중이면 장애물 생성 간격도 바로 반영
   if (running && !gameOver) {
     if (obstacleSpawner) clearInterval(obstacleSpawner);
     obstacleSpawner = setInterval(spawnObstacle, obstacleSettings.spawnInterval);
@@ -247,28 +415,35 @@ function setDifficulty(diffKey) {
 
 function resetGame() {
   score = 0;
+  lives = 3;
   gameOver = false;
   running = true;
 
   player.x = canvas.width / 2 - player.width / 2;
   player.y = canvas.height - 80;
   player.dx = 0;
+  player.isInvincible = false;
+  player.isShielded = false;
   obstacles.length = 0;
+  items.length = 0;
 
-  // 현재 난이도 기반으로 다시 세팅
-  const settings = difficultySettings[currentDifficultyKey];
-  player.speed = settings.playerSpeed;
-  obstacleSettings.baseSpeed = settings.baseSpeed;
-  obstacleSettings.speed = settings.baseSpeed;
-  obstacleSettings.spawnInterval = settings.spawnInterval;
+  const s = difficultySettings[currentDifficultyKey];
+  player.speed = s.playerSpeed;
+  obstacleSettings.baseSpeed = s.baseSpeed;
+  obstacleSettings.speed = s.baseSpeed;
+  obstacleSettings.spawnInterval = s.spawnInterval;
 
   scoreEl.textContent = "점수: 0";
+  livesEl.innerHTML = `생명: ${"❤️".repeat(lives)}`;
 
   overlay.classList.add("hidden");
   lastTimestamp = 0;
 
   if (obstacleSpawner) clearInterval(obstacleSpawner);
+  if (itemSpawner) clearInterval(itemSpawner);
+
   obstacleSpawner = setInterval(spawnObstacle, obstacleSettings.spawnInterval);
+  itemSpawner = setInterval(spawnItem, itemSettings.spawnInterval);
 
   requestAnimationFrame(gameLoop);
 }
@@ -278,19 +453,20 @@ function endGame() {
   running = false;
 
   if (obstacleSpawner) clearInterval(obstacleSpawner);
+  if (itemSpawner) clearInterval(itemSpawner);
 
   const finalScore = Math.floor(score);
-  const currentLabel = difficultySettings[currentDifficultyKey].label;
+  const label = difficultySettings[currentDifficultyKey].label;
 
   if (finalScore > highScore) {
     highScore = finalScore;
     localStorage.setItem("dodge_highscore", String(highScore));
     highScoreEl.textContent = `최고 점수: ${highScore}`;
     overlayTitle.textContent = "신기록 달성!";
-    overlayText.textContent = `난이도: ${currentLabel}\n점수: ${finalScore}점\n\n스페이스바 또는 버튼을 눌러 다시 도전해보세요.`;
+    overlayText.textContent = `난이도: ${label}\n점수: ${finalScore}점\n\n스페이스바 또는 버튼을 눌러 다시 도전해보세요.`;
   } else {
     overlayTitle.textContent = "게임 오버";
-    overlayText.textContent = `난이도: ${currentLabel}\n점수: ${finalScore}점\n\n스페이스바 또는 버튼을 눌러 재시작하세요.`;
+    overlayText.textContent = `난이도: ${label}\n점수: ${finalScore}점\n\n스페이스바 또는 버튼을 눌러 재시작하세요.`;
   }
 
   overlay.classList.remove("hidden");
@@ -310,10 +486,13 @@ function gameLoop(timestamp) {
   clearCanvas();
   movePlayer();
   updateObstacles(delta);
-  checkCollision();
+  updateItems(delta);
+  checkCollisions();
   updateScore(delta);
   drawPlayer();
   drawObstacles();
+  drawItems();
+  updateHUD();
 
   if (!gameOver) {
     requestAnimationFrame(gameLoop);
