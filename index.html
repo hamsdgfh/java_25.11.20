@@ -1,76 +1,397 @@
 <!DOCTYPE html>
 <html lang="ko">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>장애물 피하기 게임</title>
-  <link rel="stylesheet" href="style.css" />
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>장애물 피하기 게임</title>
+    <style>
+        /* 기본적인 페이지 스타일링 */
+        body {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            margin: 0;
+            background-color: #f0f0f0;
+            font-family: 'Malgun Gothic', sans-serif;
+        }
+        /* 캔버스 주변에 컨테이너를 두어 위치 지정 */
+        #game-container {
+            position: relative;
+            border: 2px solid #333;
+            box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+        }
+        /* 캔버스 스타일 */
+        canvas {
+            display: block;
+            background-color: #fff;
+        }
+        /* 게임 정보 표시(HUD) 영역 스타일 */
+        #hud {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            padding: 10px;
+            box-sizing: border-box;
+            display: flex;
+            justify-content: space-between;
+            font-size: 20px;
+            color: #333;
+            pointer-events: none; /* 마우스 이벤트 통과 */
+        }
+        #hud > div {
+            background: rgba(255, 255, 255, 0.7);
+            padding: 5px 10px;
+            border-radius: 5px;
+        }
+        /* 게임 오버 메시지 스타일 */
+        #game-over {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            display: none; /* 평상시에는 숨김 */
+            font-size: 40px;
+            color: #D32F2F;
+            font-weight: bold;
+            text-align: center;
+            background: rgba(255, 255, 255, 0.8);
+            padding: 20px;
+            border-radius: 10px;
+        }
+        #game-over span {
+            font-size: 18px;
+            font-weight: normal;
+            display: block;
+            margin-top: 10px;
+        }
+    </style>
 </head>
 <body>
-  <div class="page-bg"></div>
 
-  <div class="game-wrapper">
-    <header class="game-header">
-      <h1 class="game-title">장애물 피하기</h1>
-      <p class="game-subtitle">← → 방향키로 피하고, 스페이스로 시작/다시하기</p>
+<div id="game-container">
+    <canvas id="gameCanvas" width="480" height="640"></canvas>
+    <div id="hud">
+        <div id="score">점수: 0</div>
+        <div id="lives">생명: ❤️❤️❤️</div>
+        <div id="high-score">최고: 0</div>
+    </div>
+    <div id="game-over">게임 오버<span>스페이스바를 눌러 다시 시작</span></div>
+</div>
 
-      <div class="difficulty-select">
-        <span class="difficulty-label">난이도</span>
-        <button class="diff-btn active" data-diff="easy">쉬움</button>
-        <button class="diff-btn" data-diff="normal">보통</button>
-        <button class="diff-btn" data-diff="hard">어려움</button>
-      </div>
-    </header>
+<script>
+    // --- DOM 요소 가져오기 ---
+    const canvas = document.getElementById('gameCanvas');
+    const ctx = canvas.getContext('2d');
+    const scoreEl = document.getElementById('score');
+    const livesEl = document.getElementById('lives');
+    const highScoreEl = document.getElementById('high-score');
+    const gameOverEl = document.getElementById('gameOver');
 
-    <main class="game-main">
-      <div id="game-container">
-        <canvas id="gameCanvas" width="480" height="640"></canvas>
+    // --- 게임 설정 ---
+    const settings = {
+        player: {
+            width: 50,
+            height: 50,
+            speed: 7,
+            invincibilityDuration: 1500, // ms, 충돌 후 무적 시간
+            shieldDuration: 5000 // ms, 쉴드 아이템 지속 시간
+        },
+        obstacle: {
+            spawnInterval: 500
+        },
+        item: {
+            spawnInterval: 8000 // 아이템은 더 드물게
+        }
+    };
+    
+    // --- 게임 변수 ---
+    let player, obstacles, items;
+    let score, highScore, lives;
+    let gameOver;
+    let gameLoopId, obstacleSpawner, itemSpawner;
+    
+    // --- 그래픽 개선: 도형 그리기 함수 ---
+    
+    // 플레이어 그리기 (그라데이션 효과)
+    function drawPlayer() {
+        if (player.isInvincible) {
+            // 무적 상태일 때 깜빡이는 효과
+            ctx.globalAlpha = (Date.now() % 300 < 150) ? 0.5 : 1.0;
+        }
+        const gradient = ctx.createLinearGradient(player.x, player.y, player.x + player.width, player.y + player.height);
+        gradient.addColorStop(0, player.isShielded ? 'lime' : '#42a5f5');
+        gradient.addColorStop(1, player.isShielded ? 'green' : '#1976d2');
+        ctx.fillStyle = gradient;
+        ctx.fillRect(player.x, player.y, player.width, player.height);
+        ctx.globalAlpha = 1.0; // 투명도 리셋
+    }
 
-        <div id="hud">
-          <div id="score">점수: 0</div>
-          <div id="high-score">최고 점수: 0</div>
-        </div>
+    // 장애물 타입에 따라 다르게 그리기
+    function drawObstacles() {
+        obstacles.forEach(ob => {
+            ctx.fillStyle = ob.color;
+            ctx.fillRect(ob.x, ob.y, ob.width, ob.height);
+        });
+    }
 
-        <div id="overlay">
-          <div class="overlay-content">
-            <h2 id="overlay-title">장애물 피하기</h2>
-            <p id="overlay-text">
-              난이도를 선택한 뒤<br />
-              게임 시작 버튼 또는 스페이스바를 눌러 시작하세요.
-            </p>
-            <button id="start-btn">게임 시작</button>
-          </div>
-        </div>
-      </div>
+    // 하트 아이템 그리기 (도형으로)
+    function drawHeart(x, y, size) {
+        ctx.fillStyle = 'deeppink';
+        ctx.beginPath();
+        const topCurveHeight = size * 0.3;
+        ctx.moveTo(x, y + topCurveHeight);
+        // Top left curve
+        ctx.bezierCurveTo(x, y, x - size / 2, y, x - size / 2, y + topCurveHeight);
+        // Bottom left curve
+        ctx.bezierCurveTo(x - size / 2, y + (size + topCurveHeight) / 2, x, y + (size + topCurveHeight) / 2, x, y + size);
+        // Bottom right curve
+        ctx.bezierCurveTo(x, y + (size + topCurveHeight) / 2, x + size / 2, y + (size + topCurveHeight) / 2, x + size / 2, y + topCurveHeight);
+        // Top right curve
+        ctx.bezierCurveTo(x + size / 2, y, x, y, x, y + topCurveHeight);
+        ctx.closePath();
+        ctx.fill();
+    }
+    
+    // 쉴드 아이템 그리기 (원)
+    function drawShield(x, y, size) {
+        ctx.fillStyle = 'limegreen';
+        ctx.beginPath();
+        ctx.arc(x + size / 2, y + size / 2, size / 2, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.fillStyle = 'white';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.font = 'bold 16px sans-serif';
+        ctx.fillText('S', x + size / 2, y + size / 2 + 1);
+    }
 
-      <aside class="info-panel">
-        <h2>조작 방법</h2>
-        <ul>
-          <li>◀ / ▶ 또는 왼쪽 / 오른쪽 방향키로 이동</li>
-          <li>스페이스바: 게임 시작 / 재시작</li>
-        </ul>
+    // 아이템 타입에 따라 다르게 그리기
+    function drawItems() {
+        items.forEach(item => {
+            if (item.type === 'life') {
+                drawHeart(item.x, item.y, item.width);
+            } else if (item.type === 'shield') {
+                drawShield(item.x, item.y, item.width);
+            }
+        });
+    }
 
-        <h2>난이도 설명</h2>
-        <ul>
-          <li><b>쉬움</b>: 장애물 느림, 생성 간격 여유</li>
-          <li><b>보통</b>: 기본 속도</li>
-          <li><b>어려움</b>: 장애물 빠르고 자주 등장</li>
-        </ul>
+    // --- 게임 로직 ---
 
-        <h2>게임 팁</h2>
-        <ul>
-          <li>시간이 지날수록 점수가 올라요.</li>
-          <li>장애물과 닿으면 게임 오버!</li>
-          <li>최고 점수 기록에 도전해보세요 🔥</li>
-        </ul>
-      </aside>
-    </main>
+    function init() {
+        // 플레이어 초기화
+        player = {
+            x: canvas.width / 2 - settings.player.width / 2,
+            y: canvas.height - settings.player.height - 10,
+            width: settings.player.width,
+            height: settings.player.height,
+            speed: settings.player.speed,
+            dx: 0,
+            isInvincible: false,
+            isShielded: false
+        };
 
-    <footer class="game-footer">
-      <span>Made with JavaScript &lt;3</span>
-    </footer>
-  </div>
+        // 변수 초기화
+        score = 0;
+        lives = 3;
+        gameOver = false;
+        obstacles = [];
+        items = [];
 
-  <script src="script.js"></script>
+        // UI 업데이트
+        updateHUD();
+        highScore = localStorage.getItem('highscore') || 0;
+        highScoreEl.textContent = `최고: ${highScore}`;
+        gameOverEl.style.display = 'none';
+
+        // 게임 루프 및 스포너 시작
+        startGame();
+    }
+
+    function startGame() {
+        if (gameLoopId) cancelAnimationFrame(gameLoopId);
+        if (obstacleSpawner) clearInterval(obstacleSpawner);
+        if (itemSpawner) clearInterval(itemSpawner);
+
+        obstacleSpawner = setInterval(spawnObstacle, settings.obstacle.spawnInterval);
+        itemSpawner = setInterval(spawnItem, settings.item.spawnInterval);
+        gameLoop();
+    }
+    
+    function gameLoop() {
+        if (gameOver) {
+            handleGameOver();
+            return;
+        }
+        
+        clearCanvas();
+        
+        movePlayer();
+        updateObstacles();
+        updateItems();
+        
+        checkCollisions();
+        
+        score++; // 점수 증가
+        
+        drawPlayer();
+        drawObstacles();
+        drawItems();
+        updateHUD();
+        
+        gameLoopId = requestAnimationFrame(gameLoop);
+    }
+    
+    function handleGameOver() {
+        // 최고 점수 갱신
+        if (score > highScore) {
+            highScore = score;
+            localStorage.setItem('highscore', highScore);
+            highScoreEl.textContent = `최고: ${highScore}`;
+        }
+        gameOverEl.style.display = 'block';
+        clearInterval(obstacleSpawner);
+        clearInterval(itemSpawner);
+    }
+    
+    function movePlayer() {
+        player.x += player.dx;
+        if (player.x < 0) player.x = 0;
+        if (player.x + player.width > canvas.width) player.x = canvas.width - player.width;
+    }
+
+    function spawnObstacle() {
+        const rand = Math.random();
+        let type, width, height, color, speed;
+
+        if (rand < 0.6) { // 60% 확률 일반
+            type = 'normal'; width = 50; height = 20; color = '#e53935'; speed = 4;
+        } else if (rand < 0.85) { // 25% 확률 빠른
+            type = 'fast'; width = 30; height = 30; color = '#fdd835'; speed = 7;
+        } else { // 15% 확률 큰
+            type = 'large'; width = 80; height = 25; color = '#546e7a'; speed = 3;
+        }
+        
+        obstacles.push({
+            x: Math.random() * (canvas.width - width),
+            y: 0 - height,
+            width, height, color, speed
+        });
+    }
+
+    function spawnItem() {
+        const rand = Math.random();
+        let type, size = 30;
+
+        if (rand < 0.6) { // 60% 확률 생명
+             type = 'life';
+        } else { // 40% 확률 쉴드
+             type = 'shield';
+        }
+
+        items.push({
+            x: Math.random() * (canvas.width - size),
+            y: 0 - size,
+            width: size,
+            height: size,
+            speed: 3,
+            type
+        });
+    }
+
+    function updateEntities(entities) {
+        for (let i = entities.length - 1; i >= 0; i--) {
+            const entity = entities[i];
+            entity.y += entity.speed;
+            if (entity.y > canvas.height) {
+                entities.splice(i, 1);
+            }
+        }
+    }
+    const updateObstacles = () => updateEntities(obstacles);
+    const updateItems = () => updateEntities(items);
+
+    function checkCollisions() {
+        // 장애물 충돌
+        if (!player.isInvincible && !player.isShielded) {
+            obstacles.forEach(ob => {
+                if (isColliding(player, ob)) {
+                    lives--;
+                    if (lives <= 0) {
+                        gameOver = true;
+                    } else {
+                        // 충돌 후 잠시 무적
+                        setTemporaryInvincibility(settings.player.invincibilityDuration);
+                    }
+                }
+            });
+        }
+        
+        // 아이템 충돌
+        for (let i = items.length - 1; i >= 0; i--) {
+            const item = items[i];
+            if (isColliding(player, item)) {
+                activateItem(item.type);
+                items.splice(i, 1);
+            }
+        }
+    }
+
+    function isColliding(rect1, rect2) {
+        return rect1.x < rect2.x + rect2.width &&
+               rect1.x + rect1.width > rect2.x &&
+               rect1.y < rect2.y + rect2.height &&
+               rect1.y + rect1.height > rect2.y;
+    }
+
+    function activateItem(type) {
+        if (type === 'life') {
+            if (lives < 5) lives++; // 최대 5개
+        } else if (type === 'shield') {
+            player.isShielded = true;
+            setTimeout(() => {
+                player.isShielded = false;
+            }, settings.player.shieldDuration);
+        }
+    }
+
+    function setTemporaryInvincibility(duration) {
+        player.isInvincible = true;
+        setTimeout(() => {
+            player.isInvincible = false;
+        }, duration);
+    }
+
+    function clearCanvas() {
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+    }
+    
+    function updateHUD() {
+        scoreEl.textContent = `점수: ${score}`;
+        highScoreEl.textContent = `최고: ${highScore}`;
+        livesEl.innerHTML = `생명: ${'❤️'.repeat(lives)}`;
+    }
+
+    // --- 이벤트 리스너 ---
+    function keyDown(e) {
+        if (e.key === 'ArrowRight' || e.key === 'Right') player.dx = player.speed;
+        else if (e.key === 'ArrowLeft' || e.key === 'Left') player.dx = -player.speed;
+        else if (e.code === 'Space' && gameOver) init(); // 재시작
+    }
+
+    function keyUp(e) {
+        if (e.key.includes('Arrow')) player.dx = 0;
+    }
+
+    document.addEventListener('keydown', keyDown);
+    document.addEventListener('keyup', keyUp);
+
+    // --- 게임 시작 ---
+    init();
+
+</script>
+
 </body>
 </html>
