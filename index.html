@@ -12,7 +12,14 @@
   <div class="game-wrapper">
     <header class="game-header">
       <h1 class="game-title">장애물 피하기</h1>
-      <p class="game-subtitle">← → 방향키로 피하고, 스페이스로 다시 시작!</p>
+      <p class="game-subtitle">← → 방향키로 피하고, 스페이스로 시작/다시하기</p>
+
+      <div class="difficulty-select">
+        <span class="difficulty-label">난이도</span>
+        <button class="diff-btn active" data-diff="easy">쉬움</button>
+        <button class="diff-btn" data-diff="normal">보통</button>
+        <button class="diff-btn" data-diff="hard">어려움</button>
+      </div>
     </header>
 
     <main class="game-main">
@@ -27,7 +34,10 @@
         <div id="overlay">
           <div class="overlay-content">
             <h2 id="overlay-title">장애물 피하기</h2>
-            <p id="overlay-text">시작하려면 아래 버튼을 누르거나 스페이스바를 누르세요.</p>
+            <p id="overlay-text">
+              난이도를 선택한 뒤<br />
+              게임 시작 버튼 또는 스페이스바를 눌러 시작하세요.
+            </p>
             <button id="start-btn">게임 시작</button>
           </div>
         </div>
@@ -40,10 +50,17 @@
           <li>스페이스바: 게임 시작 / 재시작</li>
         </ul>
 
+        <h2>난이도 설명</h2>
+        <ul>
+          <li><b>쉬움</b>: 장애물 느림, 생성 간격 여유</li>
+          <li><b>보통</b>: 기본 속도</li>
+          <li><b>어려움</b>: 장애물 빠르고 자주 등장</li>
+        </ul>
+
         <h2>게임 팁</h2>
         <ul>
           <li>시간이 지날수록 점수가 올라요.</li>
-          <li>장애물과 닿으면 바로 게임 오버!</li>
+          <li>장애물과 닿으면 게임 오버!</li>
           <li>최고 점수 기록에 도전해보세요 🔥</li>
         </ul>
       </aside>
