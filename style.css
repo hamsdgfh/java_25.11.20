@@ -1,0 +1,235 @@
+/* 전체 배경 그라디언트 */
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  font-family: system-ui, -apple-system, BlinkMacSystemFont, "Noto Sans KR",
+    sans-serif;
+  color: #f5f5f5;
+  min-height: 100vh;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  background: radial-gradient(circle at top, #2e2a5f 0, #050716 55%, #000 100%);
+  overflow: hidden;
+}
+
+/* 흐릿한 네온 원 배경 */
+.page-bg::before,
+.page-bg::after {
+  content: "";
+  position: fixed;
+  width: 400px;
+  height: 400px;
+  border-radius: 50%;
+  filter: blur(60px);
+  opacity: 0.6;
+  z-index: -1;
+}
+.page-bg::before {
+  background: #ff6ac1;
+  top: -80px;
+  left: -80px;
+}
+.page-bg::after {
+  background: #4ce0ff;
+  bottom: -120px;
+  right: -120px;
+}
+
+/* 메인 게임 카드 래퍼 */
+.game-wrapper {
+  background: rgba(8, 8, 20, 0.9);
+  border-radius: 24px;
+  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.7),
+    0 0 0 1px rgba(255, 255, 255, 0.04);
+  padding: 24px 28px;
+  max-width: 960px;
+  width: 100%;
+  backdrop-filter: blur(18px);
+}
+
+/* 헤더 */
+.game-header {
+  text-align: center;
+  margin-bottom: 16px;
+}
+
+.game-title {
+  font-size: 32px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  margin: 0;
+  background: linear-gradient(90deg, #ff6ac1, #ffe66a, #4ce0ff);
+  -webkit-background-clip: text;
+  color: transparent;
+}
+
+.game-subtitle {
+  margin: 6px 0 0;
+  font-size: 14px;
+  color: #9ea2c7;
+}
+
+/* 메인 레이아웃: 캔버스 + 정보 패널 */
+.game-main {
+  display: grid;
+  grid-template-columns: minmax(0, 520px) minmax(220px, 1fr);
+  gap: 20px;
+  align-items: stretch;
+}
+
+/* 작은 화면에서 세로 정렬 */
+@media (max-width: 900px) {
+  .game-main {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* 게임 컨테이너 카드 */
+#game-container {
+  position: relative;
+  border-radius: 20px;
+  background: radial-gradient(circle at top, #141831, #050716 60%);
+  padding: 16px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.6);
+}
+
+/* 캔버스 */
+#gameCanvas {
+  display: block;
+  width: 100%;
+  height: auto;
+  border-radius: 12px;
+  background: #0a0b15;
+  box-shadow: inset 0 0 40px #000;
+}
+
+/* HUD (점수, 최고 점수) */
+#hud {
+  position: absolute;
+  top: 14px;
+  left: 24px;
+  right: 24px;
+  display: flex;
+  justify-content: space-between;
+  pointer-events: none;
+}
+
+#score,
+#high-score {
+  font-size: 16px;
+  padding: 6px 10px;
+  border-radius: 999px;
+  background: rgba(5, 5, 15, 0.7);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  box-shadow: 0 0 8px rgba(0, 0, 0, 0.7);
+}
+
+#score {
+  color: #ffe66a;
+}
+#high-score {
+  color: #4ce0ff;
+}
+
+/* 오버레이 (시작 & 게임 오버 화면) */
+#overlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  backdrop-filter: blur(10px);
+  background: radial-gradient(circle at top, rgba(0, 0, 0, 0.55), transparent);
+}
+
+#overlay.hidden {
+  display: none;
+}
+
+.overlay-content {
+  text-align: center;
+  padding: 20px 24px;
+  border-radius: 16px;
+  background: rgba(8, 8, 20, 0.95);
+  box-shadow: 0 18px 40px rgba(0, 0, 0, 0.85);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+#overlay-title {
+  margin: 0 0 8px;
+  font-size: 24px;
+  color: #ffffff;
+}
+
+#overlay-text {
+  margin: 0 0 16px;
+  font-size: 14px;
+  color: #b2b6df;
+}
+
+/* 버튼 스타일 */
+#start-btn {
+  padding: 10px 24px;
+  border-radius: 999px;
+  border: none;
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  cursor: pointer;
+  background: linear-gradient(90deg, #ff6ac1, #ffe66a, #4ce0ff);
+  color: #050716;
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.7);
+  transition: transform 0.1s ease, box-shadow 0.1s ease, filter 0.1s ease;
+}
+
+#start-btn:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 14px 30px rgba(0, 0, 0, 0.85);
+  filter: brightness(1.05);
+}
+
+#start-btn:active {
+  transform: translateY(1px);
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.75);
+}
+
+/* 오른쪽 정보 패널 */
+.info-panel {
+  padding: 16px 18px;
+  border-radius: 20px;
+  background: radial-gradient(circle at top left, #181b38, #090a15 70%);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.7);
+  border: 1px solid rgba(255, 255, 255, 0.04);
+}
+
+.info-panel h2 {
+  font-size: 16px;
+  margin: 0 0 8px;
+  color: #ffffff;
+}
+
+.info-panel ul {
+  list-style: none;
+  padding-left: 0;
+  margin: 0 0 12px;
+  font-size: 14px;
+  color: #c3c7f5;
+}
+
+.info-panel li::before {
+  content: "• ";
+  color: #ff6ac1;
+}
+
+/* 푸터 */
+.game-footer {
+  margin-top: 14px;
+  text-align: center;
+  font-size: 12px;
+  color: #7b80ab;
+}
