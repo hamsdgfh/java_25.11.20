@@ -1,0 +1,258 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>장애물 피하기 게임</title>
+    <style>
+        /* 기본적인 페이지 스타일링 */
+        body {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            margin: 0;
+            background-color: #f0f0f0;
+            font-family: sans-serif;
+        }
+        /* 캔버스 주변에 컨테이너를 두어 위치 지정 */
+        #game-container {
+            position: relative;
+            border: 2px solid #333;
+        }
+        /* 캔버스 스타일 */
+        canvas {
+            display: block;
+            background-color: #fff;
+        }
+        /* 게임 오버 메시지 스타일 */
+        #game-over {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            display: none; /* 평상시에는 숨김 */
+            font-size: 48px;
+            color: red;
+            font-weight: bold;
+        }
+        /* 점수 표시 스타일 */
+        #score {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            font-size: 24px;
+            color: #333;
+        }
+    </style>
+</head>
+<body>
+
+<div id="game-container">
+    <canvas id="gameCanvas" width="480" height="640"></canvas>
+    <div id="score">점수: 0</div>
+    <div id="game-over">게임 오버</div>
+</div>
+
+<script>
+    // DOM 요소 가져오기
+    const canvas = document.getElementById('gameCanvas');
+    const ctx = canvas.getContext('2d');
+    const scoreEl = document.getElementById('score');
+    const gameOverEl = document.getElementById('gameOver');
+
+    // --- 게임 변수 설정 ---
+
+    // 플레이어 설정
+    const player = {
+        x: canvas.width / 2 - 25,
+        y: canvas.height - 60,
+        width: 50,
+        height: 50,
+        color: 'blue',
+        speed: 7,
+        dx: 0 // 좌우 이동 방향
+    };
+
+    // 장애물 설정
+    const obstacles = [];
+    const obstacleSettings = {
+        width: 60,
+        height: 20,
+        color: 'red',
+        speed: 4,
+        spawnInterval: 600 // ms, 장애물 생성 주기
+    };
+
+    let score = 0;
+    let gameOver = false;
+    let obstacleSpawner; // 장애물 생성기 ID (setInterval)
+
+    // --- 그리기 함수 ---
+
+    // 플레이어 그리기
+    function drawPlayer() {
+        ctx.fillStyle = player.color;
+        ctx.fillRect(player.x, player.y, player.width, player.height);
+    }
+
+    // 장애물 그리기
+    function drawObstacles() {
+        ctx.fillStyle = obstacleSettings.color;
+        obstacles.forEach(obstacle => {
+            ctx.fillRect(obstacle.x, obstacle.y, obstacle.width, obstacle.height);
+        });
+    }
+
+    // --- 게임 로직 함수 ---
+
+    // 플레이어 위치 업데이트
+    function movePlayer() {
+        player.x += player.dx;
+
+        // 캔버스 경계 체크
+        if (player.x < 0) {
+            player.x = 0;
+        }
+        if (player.x + player.width > canvas.width) {
+            player.x = canvas.width - player.width;
+        }
+    }
+
+    // 새로운 장애물 생성
+    function spawnObstacle() {
+        const x = Math.random() * (canvas.width - obstacleSettings.width);
+        obstacles.push({
+            x: x,
+            y: 0 - obstacleSettings.height,
+            width: obstacleSettings.width,
+            height: obstacleSettings.height
+        });
+    }
+
+    // 장애물 위치 업데이트 및 화면 밖 장애물 제거
+    function updateObstacles() {
+        for (let i = obstacles.length - 1; i >= 0; i--) {
+            const obstacle = obstacles[i];
+            obstacle.y += obstacleSettings.speed;
+
+            // 장애물이 화면 밖으로 나가면 배열에서 제거
+            if (obstacle.y > canvas.height) {
+                obstacles.splice(i, 1);
+            }
+        }
+    }
+
+    // 충돌 감지
+    function checkCollision() {
+        obstacles.forEach(obstacle => {
+            // AABB (Axis-Aligned Bounding Box) 충돌 감지
+            if (
+                player.x < obstacle.x + obstacle.width &&
+                player.x + player.width > obstacle.x &&
+                player.y < obstacle.y + obstacle.height &&
+                player.y + player.height > obstacle.y
+            ) {
+                gameOver = true; // 충돌 발생 시 게임 오버
+            }
+        });
+    }
+    
+    // 점수 업데이트 및 표시
+    function updateScore() {
+        score++;
+        scoreEl.textContent = `점수: ${score}`;
+    }
+
+    // 화면 클리어
+    function clearCanvas() {
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+    }
+    
+    // 게임 리셋
+    function resetGame() {
+        // 모든 변수 초기화
+        gameOver = false;
+        score = 0;
+        player.x = canvas.width / 2 - 25;
+        player.y = canvas.height - 60;
+        player.dx = 0;
+        obstacles.length = 0; // 장애물 배열 비우기
+
+        // UI 초기화
+        gameOverEl.style.display = 'none';
+        scoreEl.textContent = `점수: 0`;
+
+        // 게임 루프 및 장애물 생성 재시작
+        startGame();
+    }
+    
+    // --- 메인 게임 루프 ---
+    function gameLoop() {
+        if (gameOver) {
+            // 게임 오버 처리
+            gameOverEl.style.display = 'block';
+            clearInterval(obstacleSpawner); // 장애물 생성 중지
+            return; // 루프 종료
+        }
+
+        // 1. 화면 지우기
+        clearCanvas();
+
+        // 2. 상태 업데이트
+        movePlayer();
+        updateObstacles();
+        checkCollision();
+        updateScore();
+        
+        // 3. 그리기
+        drawPlayer();
+        drawObstacles();
+
+        // 다음 프레임 요청
+        requestAnimationFrame(gameLoop);
+    }
+
+    // --- 이벤트 리스너 ---
+
+    // 키보드 누름 이벤트
+    function keyDown(e) {
+        if (e.key === 'ArrowRight' || e.key === 'Right') {
+            player.dx = player.speed;
+        } else if (e.key === 'ArrowLeft' || e.key === 'Left') {
+            player.dx = -player.speed;
+        } else if (e.code === 'Space' && gameOver) {
+            // 게임 오버 상태에서 스페이스바를 누르면 재시작
+            resetGame();
+        }
+    }
+
+    // 키보드 뗌 이벤트
+    function keyUp(e) {
+        if (
+            e.key === 'ArrowRight' ||
+            e.key === 'Right' ||
+            e.key === 'ArrowLeft' ||
+            e.key === 'Left'
+        ) {
+            player.dx = 0;
+        }
+    }
+
+    document.addEventListener('keydown', keyDown);
+    document.addEventListener('keyup', keyUp);
+
+    // --- 게임 시작 ---
+    function startGame() {
+        // 주기적으로 장애물 생성
+        obstacleSpawner = setInterval(spawnObstacle, obstacleSettings.spawnInterval);
+        // 게임 루프 시작
+        gameLoop();
+    }
+
+    startGame(); // 페이지 로드 시 게임 시작
+
+</script>
+
+</body>
+</html>
